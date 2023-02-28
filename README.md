@@ -6,7 +6,7 @@ In the future might also add support for deleting content that has been watched 
 
 # Setup
 
-For the above mentioned usecase this tool already works quite well. 
+For the above mentioned usecase this tool already works quite well.
 To use it first check out this repo and install dependencies:
 
 ```sh
@@ -15,17 +15,17 @@ nvm use
 yarn
 ```
 
-then add a .seedboxcleanerrc file: 
+then add a .seedboxcleanerrc file:
 
 ```json
 {
-    "fileManagers": {
-        "deluge": {
-            "baseUrl": "delugeEndpoint",
-            "password": "password",
-            "timeout": 60000
-        }
+  "fileManagers": {
+    "deluge": {
+      "baseUrl": "delugeEndpoint",
+      "password": "password",
+      "timeout": 60000
     }
+  }
 }
 ```
 
@@ -47,6 +47,7 @@ The clean tool is interactive and asks for final confirmation at the end.
 Once confirmed, the tool will use Deluge's rest api for removing torrents + data to perform the cleanup.
 
 # TODO:
+
 - Labelling
   - Add appropiate tarball label after filebot/rename/extraction script runs making "scan" mostly obselete
 - Clean
@@ -56,12 +57,3 @@ Once confirmed, the tool will use Deluge's rest api for removing torrents + data
     - Seed ration
     - age
     - etc
-
-
-
-
-
-
-
-
-

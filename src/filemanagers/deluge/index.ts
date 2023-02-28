@@ -78,7 +78,7 @@ export class DelugeManager {
 
     //TODO: Should probably change this to listTorrents and pass in the appropiate filter
     const res = await client.getAllData();
-    
+
     return res.torrents
       .filter(
         (torrent) =>
