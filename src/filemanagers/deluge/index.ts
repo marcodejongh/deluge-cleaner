@@ -38,6 +38,9 @@ export class DelugeManager {
   /*
         Marks all the torrents in Deluge with tarball or not tarball labels.
         When deciding what to remove in the clean action we use the tarball label only.
+
+        Using a seperate scan command because the getAllData endpoint doesnt return the file contents of a torrent.
+        So if we wanted to do this as part of the clean command it would be slow (and it's already quite slow)
     */
   async scan() {
     const client = this.client;
