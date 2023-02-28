@@ -46,6 +46,8 @@ export const clean = async (config: ConfigInterface) => {
     minAge: answers["mineageinweeks"],
   });
 
+  removables.sort((a, b) => a.name.localeCompare(b.name));
+
   const totalCleaned = removables.reduce((a, { size: b }) => a + b, 0);
   console.table([
     ...removables.map((item) => ({ name: item.name, size: bytes.format(item.size, { unit: "GB" }) })),
