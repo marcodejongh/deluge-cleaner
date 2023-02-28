@@ -51,7 +51,10 @@ Once confirmed, the tool will use Deluge's rest api for removing torrents + data
 - Labelling
   - Add appropiate tarball label after filebot/rename/extraction script runs making "scan" mostly obselete
 - Clean
-  - create command that can show all the things that can be removed
+  - Radarr support
+  - Sonarr support
+  - ^^ Using plex as datasource for deciding what can be cleaned up.
+- Radarr/Sonarr - Follow symlinks on delete (since my box symlinks everything)
 - clean-auto
   - just execute clean based on config
     - Seed ration
