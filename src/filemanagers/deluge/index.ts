@@ -99,11 +99,9 @@ export class DelugeManager {
   async cleanup(removableItems: RemovableItemList) {
     const client = this.client;
 
-    //TODO: Should probably change this to listTorrents and pass in the appropiate filter
-    // const res = await client.getAllData();
     for (const removableItem of removableItems) {
       console.log(`Removing ${removableItem.name}`);
-      // await client.removeTorrent(removableItem.id, true);
+      await client.removeTorrent(removableItem.id, true);
     }
   }
 }
