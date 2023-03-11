@@ -2,8 +2,8 @@ import { Deluge } from "@ctrl/deluge";
 import { differenceInCalendarWeeks } from "date-fns";
 import { getAllDataResult } from "./mocks/getAllData.js";
 
-const TARBALL_LABEL = "seedboxcleaner-tarball";
-const SINGLEFILE_LABEL = "seedboxcleaner-singlefile";
+const SONARR_IMPORTED_LABEL = "sonarr-imported";
+const RADARR_IMPORTED_LABEL = "radarr-imported";
 
 export interface DelugeConfig {
   baseUrl: string;
@@ -47,18 +47,10 @@ export class DelugeManager {
 
     const res = await client.getAllData();
 
-    const labels = await client.getLabels();
-    if (!labels.result.includes(TARBALL_LABEL)) {
-      await client.addLabel(TARBALL_LABEL);
-    }
-    if (!labels.result.includes(SINGLEFILE_LABEL)) {
-      await client.addLabel(SINGLEFILE_LABEL);
-    }
-
     const removables = res.torrents.filter(
       (torrent) =>
         torrent.state === "seeding" &&
-        (!torrent.label || (!torrent.label.includes(TARBALL_LABEL) && !torrent.label.includes(SINGLEFILE_LABEL)))
+        (!torrent.label || (torrent.label.includes(SONARR_IMPORTED_LABEL) || !torrent.label.includes(RADARR_IMPORTED_LABEL)))
     );
 
     for (const removable of removables) {
@@ -68,7 +60,6 @@ export class DelugeManager {
         const isTarball =
           fileList.type !== "file" && Object.keys(fileList.contents).some((file: any) => file.endsWith("rar"));
 
-        await client.setTorrentLabel(removable.id, isTarball ? TARBALL_LABEL : SINGLEFILE_LABEL);
         console.log(`Adding label to ${removable.name}`);
       } catch (err) {
         console.error(err);
@@ -86,7 +77,7 @@ export class DelugeManager {
       .filter(
         (torrent) =>
           torrent.state === "seeding" &&
-          (!torrent.label || (torrent.label.includes(TARBALL_LABEL) && !torrent.label.includes(SINGLEFILE_LABEL))) &&
+          (!torrent.label || (torrent.label.includes(SONARR_IMPORTED_LABEL) || torrent.label.includes(RADARR_IMPORTED_LABEL))) &&
           //TODO: DateAdded is not the same as seeding date, but for me it usually will be pretty close
           // Should figure out how to get the real seed date here.
           (differenceInCalendarWeeks(new Date(), new Date(torrent.dateAdded)) >= minAge || torrent.ratio >= seedratio)
