@@ -1,0 +1,6 @@
+{
+    "deluge": {
+        "baseUrl": "example",
+        "password": "example"
+    }
+}

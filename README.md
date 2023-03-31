@@ -12,22 +12,35 @@ nvm use
 yarn
 ```
 
-then add a .seedboxcleanerrc file:
+then add a .delugecleanerrc file:
 
 ```json
 {
   "deluge": {
     "baseUrl": "delugeEndpoint",
     "password": "password",
-    "timeout": 60000
   }
 }
 ```
 
+OR just pass that config in as flags:
+
+```
+ NODE_OPTIONS="--loader ts-node/esm" node src/cli.ts clean --delugeUrl delugeEndpoint --delugePassword password
+```
+
+OR if you've recently gotten obsessed with not littering api keys everywhere and you use 1Password. Use 1password CLI to store the secrets and run: 
+
+```
+node --loader ts-node/esm src/cli.ts clean --delugeUrl $(op read op://dev/deluge/website) --delugePassword $( op read op://dev/deluge/password)
+```
+
+Where the dev vault is where the deluge secrets are stored.
+
 Then to clean up run:
 
 ```
- NODE_OPTIONS="--loader ts-node/esm" node --inspect-brk src/cli.ts clean
+ NODE_OPTIONS="--loader ts-node/esm" node src/cli.ts clean
 ```
 
 The clean tool is interactive and asks for final confirmation at the end.

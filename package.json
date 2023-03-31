@@ -1,7 +1,10 @@
 {
-  "name": "SeedboxCleaner",
+  "name": "deluge-cleaner",
   "version": "1.0.0",
-  "description": "Cleans my seedbox",
+  "description": "Cleans my deluge torrents",
+  "scripts": {
+    "clean": "node --loader ts-node/esm src/cli.ts clean --delugeUrl $(op read op://betty/deluge/website) --delugePassword $( op read op://betty/deluge/password)"
+  },
   "main": "index.ts",
   "type": "module",
   "license": "MIT",

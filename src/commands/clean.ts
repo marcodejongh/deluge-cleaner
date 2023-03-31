@@ -4,8 +4,13 @@ import inquirer from "inquirer";
 import bytes from "bytes";
 import chalk from "chalk";
 
-export const clean = async (config: ConfigInterface) => {
-  const delugeManager = new DelugeManager(config.deluge);
+export interface CleanConfig {
+  password: string;
+  baseUrl: string;
+  timeout: number;
+}
+export const clean = async (config: CleanConfig) => {
+  const delugeManager = new DelugeManager(config);
   // delugeManager.scan();
   const prompt = inquirer.createPromptModule();
   
@@ -34,7 +39,11 @@ export const clean = async (config: ConfigInterface) => {
   });
 
   removables.sort((a, b) => a.name.localeCompare(b.name));
-
+  if (removables.length === 0) {
+    console.log(chalk.red(`Nothing to cleanup based on the current criteria`));
+    return;
+  }
+  
   const totalCleaned = removables.reduce((a, { size: b }) => a + b, 0);
   console.table([
     ...removables.map((item) => ({ name: item.name, size: bytes.format(item.size, { unit: "GB" }) })),
