@@ -1,10 +1,20 @@
 # Deluge cleaner
 
-Simple node script for removing torrents in deluge based on age and seed ratio. 
+Simple node script for removing torrents(+ data) in deluge based on age and seed ratio. 
 Built with the assumption it's cleaning up torrents added by Sonarr & Radarr.
 So it assumes "sonarr-imported" & "radarr-imported" flags are being added.
 Shouldn't be hard to put that behind another prompt just havent felt the need to for myself personally. 
 But happy to accept PR's.
+
+# Starr apps / deluge setup
+1. Setup Extractor+ in deluge to extract into the torrents directory and to delete extracted files after ~3 days.
+2. Setup Starr apps to use hardlinks on import and add a "sonarr-imported" or "radarr-imported" label to deluge on import.
+3. Setup Starr apps to stop monitoring when a delete is detected
+4. Now you can let Starr apps and Deluge manage their respective parts. 
+5. With this setup removing torrents from deluge should not result in the media library shrinking.
+6. If disk space is required, start by cleaning up deluge torrents with high age and or ratio using this tool
+7. If more is required run the tools in https://github.com/ngovil21/Plex-Cleaner to remove stuf
+8. With this setup the remove controls in Plex can also be used for freeing up disk space. 
 
 # Setup
 
