@@ -1,6 +1,11 @@
 # Deluge cleaner
 
-Work in progress for cleaning up deluge torrents.
+Simple node script for removing torrents in deluge based on age and seed ratio. 
+Built with the assumption it's cleaning up torrents added by Sonarr & Radarr.
+So it assumes "sonarr-imported" & "radarr-imported" flags are being added.
+Shouldn't be hard to put that behind another prompt just havent felt the need to for myself personally. 
+But happy to accept PR's.
+
 # Setup
 
 For the above mentioned usecase this tool already works quite well.
