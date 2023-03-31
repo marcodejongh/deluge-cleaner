@@ -1,13 +1,17 @@
 import { ConfigInterface } from "../ConfigInterface.js";
-import { DelugeManager } from "../filemanagers/deluge/index.js";
+import { DelugeManager, RADARR_IMPORTED_LABEL, SONARR_IMPORTED_LABEL } from "../deluge/index.js";
 import inquirer from "inquirer";
 import bytes from "bytes";
+import chalk from "chalk";
 
 export const clean = async (config: ConfigInterface) => {
-  const delugeManager = new DelugeManager(config.fileManagers.deluge);
+  const delugeManager = new DelugeManager(config.deluge);
   // delugeManager.scan();
   const prompt = inquirer.createPromptModule();
-
+  
+  console.info(chalk.green(`This tool will only cleanup torrents with labels: ${SONARR_IMPORTED_LABEL} or ${RADARR_IMPORTED_LABEL}`));
+  console.info(chalk.green(`Make sure to change config of Radarr and Sonarr respectively to add this labels after import`));
+  
   const answers = await prompt([
     {
       name: "seedratio",
@@ -22,23 +26,6 @@ export const clean = async (config: ConfigInterface) => {
       default: "3",
       message: "Minimum torrent age in weeks?",
     },
-    // TODO: To be implemented
-    //   {
-    //     name: "torrentConditionsAndOrOr",
-    //     type: "list",
-    //     choices: [
-    //         {
-    //             name: 'OR',
-    //             value: 'OR'
-    //         },
-    //         {
-    //             name: 'AND',
-    //             value: 'AND'
-    //         }
-    //     ],
-    //     default: 'OR',
-    //     message: "Are the 2 torrent conditions AND or OR?",
-    //   },
   ]);
 
   const removables = await delugeManager.getFilesReadyForCleaning({
@@ -58,7 +45,7 @@ export const clean = async (config: ConfigInterface) => {
     {
       name: "confirm",
       type: "confirm",
-      message: "Proceeding will delete the torrent files + data for the above printed torrents. Are you sure?",
+      message: chalk.red("Proceeding will delete the torrent files + data for the above printed torrents. Are you sure?"),
     },
   ]);
 

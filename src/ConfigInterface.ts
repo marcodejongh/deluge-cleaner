@@ -1,7 +1,5 @@
-import { DelugeConfig } from "./filemanagers/deluge/index.js";
+import { DelugeConfig } from "./deluge/index.js";
 
 export interface ConfigInterface {
-  fileManagers: {
-    deluge: DelugeConfig;
-  };
+  deluge: DelugeConfig;
 }
