@@ -1,6 +1,6 @@
 {
   "name": "deluge-cleaner",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Cleans my deluge torrents",
   "scripts": {
     "prepublish": "yarn build",
@@ -37,5 +37,8 @@
   "devDependencies": {
     "@types/node": "^18.14.2",
     "tslib": "^2.5.0"
+  },
+  "engines": {
+    "node": "> 16"
   }
 }
