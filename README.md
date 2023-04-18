@@ -12,7 +12,7 @@ But happy to accept PR's.
 3. Setup Starr apps to stop monitoring when a delete is detected
 4. Now you can let Starr apps and Deluge manage their respective parts. With this setup removing torrents from deluge should not result in the media library shrinking.
 5. If disk space is required, start by cleaning up deluge torrents with high age and or ratio using this tool
-6. If more is required run the tools in https://github.com/ngovil21/Plex-Cleaner to remove stuf
+6. If more is required run the tools in https://github.com/ngovil21/Plex-Cleaner to remove media from your library
 7. With this setup the remove controls in Plex can also be used for freeing up disk space. 
 
 # Use
