@@ -63,18 +63,18 @@ export class DelugeManager {
     return differenceInCalendarWeeks(new Date(), new Date(dateAdded)) >= minAge;
   }
 
-  _torrentHasRequiredLabels(label: string = '') {
+  _torrentHasRequiredLabels(label: string = "") {
     return label.length > 0 && (label === SONARR_IMPORTED_LABEL || label === RADARR_IMPORTED_LABEL);
   }
 
   _torrentSeedratioAndAgeFilter(hrPrevention: boolean, minAge: number, seedratio: number, torrent: NormalizedTorrent) {
     if (hrPrevention) {
-      return (this._torrentHasMinimumAge(torrent.dateAdded, minAge) || torrent.ratio >= seedratio);
+      return this._torrentHasMinimumAge(torrent.dateAdded, minAge) || torrent.ratio >= seedratio;
     } else {
-      return (this._torrentHasMinimumAge(torrent.dateAdded, minAge) && torrent.ratio >= seedratio);
+      return this._torrentHasMinimumAge(torrent.dateAdded, minAge) && torrent.ratio >= seedratio;
     }
   }
-  
+
   async getFilesReadyForCleaning({
     hrPrevention = true,
     seedratio = 2,
@@ -123,17 +123,13 @@ export class DelugeManager {
   }
 
   async cleanup(removableItems: RemovableItemList) {
-    const allPromises = Promise.all(
-      removableItems.map((torrent) => {
-        this._cleanupInternal(torrent.id);
-      })
-    );
+    const allPromises = Promise.all(removableItems.map((torrent) => this._cleanupInternal(torrent.id)));
 
     oraPromise(allPromises, { text: `Removing selected torrents` });
     await allPromises;
   }
 
-  async _cleanupInternal(id: string) {
+  _cleanupInternal(id: string) {
     return this.client.removeTorrent(id, true);
   }
 }

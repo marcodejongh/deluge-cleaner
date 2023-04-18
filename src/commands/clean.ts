@@ -28,11 +28,15 @@ export const clean = async (config: CleanConfig) => {
   );
 
   console.info(
-    `${chalk.bold('This means that if either minimum age OR seed ratio are satisfied, the torrent is eligible for deletion.')}`
+    `${chalk.bold(
+      "This means that if either minimum age OR seed ratio are satisfied, the torrent is eligible for deletion."
+    )}`
   );
 
-  console.info(`If you wish to instead only delete torrents with the given seed ratio ${chalk.bold('AND')} minimum age`);
-  console.info(`you have to answer "no" to the first question.\n `)
+  console.info(
+    `If you wish to instead only delete torrents with the given seed ratio ${chalk.bold("AND")} minimum age`
+  );
+  console.info(`you have to answer "no" to the first question.\n `);
 
   interface Answers {
     hrPreventionLogic: boolean;
@@ -64,10 +68,10 @@ export const clean = async (config: CleanConfig) => {
       name: "onlyTarballs",
       type: "confirm",
       default: false,
-      message: "Only look for tarballs?",
+      message:
+        "Only look for tarballs? If using hardlinks with the *Arr apps deleting tarballs usually frees up space immediately",
     },
   ]);
-  
 
   const removables = await delugeManager.getFilesReadyForCleaning({
     hrPrevention: answers["hrPreventionLogic"],
@@ -104,6 +108,6 @@ export const clean = async (config: CleanConfig) => {
   ]);
 
   if (finalConfirm.confirm) {
-    delugeManager.cleanup(removables);
+    await delugeManager.cleanup(removables);
   }
 };
