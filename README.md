@@ -15,7 +15,22 @@ But happy to accept PR's.
 6. If more is required run the tools in https://github.com/ngovil21/Plex-Cleaner to remove stuf
 7. With this setup the remove controls in Plex can also be used for freeing up disk space. 
 
-# Setup
+# Use
+
+The package is published to npm and can be used with npx
+
+```
+npx deluge-cleaner clean --delugeUrl #DELUGEURL# --delugePassword #DELUGEPASSWORD#
+```
+
+Or if you wanna be real fancy use 1password to manage the secrets:
+
+```
+npx deluge-cleaner clean --delugeUrl $(op read op://betty/deluge/website) --delugePassword $( op read op://betty/deluge/password)
+```
+
+
+# Local running
 
 For the above mentioned usecase this tool already works quite well.
 To use it first check out this repo and install dependencies:

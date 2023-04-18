@@ -18,7 +18,8 @@
   },
   "compilerOptions": {
     "module": "NodeNext",
-    "moduleResolution": "NodeNext"
+    "moduleResolution": "NodeNext",
+    "outDir": "dist"
     // typescript options here
   }
 }
