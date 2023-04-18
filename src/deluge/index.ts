@@ -1,6 +1,8 @@
 import { Deluge } from "@ctrl/deluge";
 import { differenceInCalendarWeeks } from "date-fns";
-// import { getAllDataResult } from "./mocks/getAllData.js";
+import { oraPromise } from "ora";
+import chalk from "chalk";
+import { NormalizedTorrent } from "./copied-internal-interfaces.js";
 
 export const SONARR_IMPORTED_LABEL = "sonarr-imported";
 export const RADARR_IMPORTED_LABEL = "radarr-imported";
@@ -12,17 +14,16 @@ export interface DelugeConfig {
 }
 
 export type CleaningOptions = {
+  hrPrevention: boolean;
   seedratio: number;
   minAge: number;
+  onlyTarballs: boolean;
 };
 
 export type RemovableItemList = Array<RemovableItem>;
 export type RemovableItemId = string;
-export type RemovableItem = {
-  id: RemovableItemId;
-  name: string;
-  // Size in bytes
-  size: number;
+export type RemovableItem = NormalizedTorrent & {
+  isTarball: boolean | null;
 };
 
 export class DelugeManager {
@@ -42,60 +43,97 @@ export class DelugeManager {
         Using a seperate scan command because the getAllData endpoint doesnt return the file contents of a torrent.
         So if we wanted to do this as part of the clean command it would be slow (and it's already quite slow)
     */
-  async scan() {
+  async isTarball(id: string, name: string): Promise<boolean> {
     const client = this.client;
 
-    const res = await client.getAllData();
+    const files = await client.getTorrentFiles(id);
+    const fileList = (files.result as any).contents[name] as any;
+    let isTarball = false;
 
-    const removables = res.torrents.filter(
-      (torrent) =>
-        torrent.state === "seeding" &&
-        (!torrent.label || (torrent.label.includes(SONARR_IMPORTED_LABEL) || !torrent.label.includes(RADARR_IMPORTED_LABEL)))
-    );
-
-    for (const removable of removables) {
-      const files = await client.getTorrentFiles(removable.id);
-      const fileList = (files.result as any).contents[removable.name] as any;
-      try {
-        const isTarball =
-          fileList.type !== "file" && Object.keys(fileList.contents).some((file: any) => file.endsWith("rar"));
-
-        console.log(`Adding label to ${removable.name}`);
-      } catch (err) {
-        console.error(err);
-      }
+    try {
+      isTarball = fileList.type !== "file" && Object.keys(fileList.contents).some((file: any) => file.endsWith("rar"));
+    } catch (err) {
+      console.error(err);
     }
+
+    return isTarball;
   }
 
-  async getFilesReadyForCleaning({ seedratio = 2, minAge = 3 }: CleaningOptions): Promise<RemovableItemList> {
+  _torrentHasMinimumAge(dateAdded: string, minAge: number): boolean {
+    return differenceInCalendarWeeks(new Date(), new Date(dateAdded)) >= minAge;
+  }
+
+  _torrentHasRequiredLabels(label: string = '') {
+    return label.length > 0 && (label === SONARR_IMPORTED_LABEL || label === RADARR_IMPORTED_LABEL);
+  }
+
+  _torrentSeedratioAndAgeFilter(hrPrevention: boolean, minAge: number, seedratio: number, torrent: NormalizedTorrent) {
+    if (hrPrevention) {
+      return (this._torrentHasMinimumAge(torrent.dateAdded, minAge) || torrent.ratio >= seedratio);
+    } else {
+      return (this._torrentHasMinimumAge(torrent.dateAdded, minAge) && torrent.ratio >= seedratio);
+    }
+  }
+  
+  async getFilesReadyForCleaning({
+    hrPrevention = true,
+    seedratio = 2,
+    minAge = 3,
+    onlyTarballs = false,
+  }: CleaningOptions): Promise<RemovableItemList> {
     const client = this.client;
 
     //TODO: Should probably change this to listTorrents and pass in the appropiate filter
-    const res = await client.getAllData();
+    const allDataRequestPromise = client.getAllData();
 
-    return res.torrents
+    oraPromise(allDataRequestPromise, { text: "Fetching all torrents" });
+
+    const allDataRequest = await allDataRequestPromise;
+
+    const torrents: RemovableItemList = allDataRequest.torrents
       .filter(
         (torrent) =>
           torrent.state === "seeding" &&
-          (!torrent.label || (torrent.label.includes(SONARR_IMPORTED_LABEL) || torrent.label.includes(RADARR_IMPORTED_LABEL))) &&
+          this._torrentHasRequiredLabels(torrent.label) &&
           //TODO: DateAdded is not the same as seeding date, but for me it usually will be pretty close
           // Should figure out how to get the real seed date here.
-          (differenceInCalendarWeeks(new Date(), new Date(torrent.dateAdded)) >= minAge || torrent.ratio >= seedratio)
+          this._torrentSeedratioAndAgeFilter(hrPrevention, minAge, seedratio, torrent)
       )
-      .map(({ id, name, totalDownloaded }) => ({
-        id,
-        name,
-        // totalSize returned by deluge is for whatever reason undefined
-        size: totalDownloaded,
+      .map((torrent) => ({
+        ...torrent,
+        isTarball: null,
       }));
+
+    const promises = [];
+    for (const torrent of torrents) {
+      // Bit yucky, but this makes all the isTarball requests run in parallel.
+      // Haven't gotten rate limited yet, but it might at some point
+      promises.push(this.isTarball(torrent.id, torrent.name).then((isTarball) => (torrent.isTarball = isTarball)));
+    }
+
+    const allTarballsPromise = Promise.all(promises);
+    oraPromise(allTarballsPromise, { text: `Fetching file information for ${chalk.bold(torrents.length)} torrents` });
+    await allTarballsPromise;
+
+    if (!onlyTarballs) {
+      return torrents;
+    }
+
+    return torrents.filter((torrent) => torrent.isTarball);
   }
 
   async cleanup(removableItems: RemovableItemList) {
-    const client = this.client;
+    const allPromises = Promise.all(
+      removableItems.map((torrent) => {
+        this._cleanupInternal(torrent.id);
+      })
+    );
 
-    for (const removableItem of removableItems) {
-      console.log(`Removing ${removableItem.name}`);
-      await client.removeTorrent(removableItem.id, true);
-    }
+    oraPromise(allPromises, { text: `Removing selected torrents` });
+    await allPromises;
+  }
+
+  async _cleanupInternal(id: string) {
+    return this.client.removeTorrent(id, true);
   }
 }
