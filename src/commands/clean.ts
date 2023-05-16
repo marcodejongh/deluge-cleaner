@@ -42,7 +42,7 @@ export const clean = async (config: CleanConfig) => {
     hrPreventionLogic: boolean;
     seedRatio: string;
     minAgeInWeeks: string;
-    onlyTarballs: boolean;
+    onlyRarTorrents: boolean;
   }
   const filterPrompt: Answers = await prompt([
     {
@@ -65,11 +65,11 @@ export const clean = async (config: CleanConfig) => {
       message: "Minimum torrent age in weeks?",
     },
     {
-      name: "onlyTarballs",
+      name: "onlyRarTorrents",
       type: "confirm",
       default: false,
       message:
-        "Only look for tarballs? If using hardlinks with the *Arr apps deleting tarballs usually frees up space immediately",
+        "Only look for RarTorrents? If using hardlinks with the *Arr apps deleting rar file torrents usually frees up space immediately",
     },
   ]);
 
@@ -77,7 +77,7 @@ export const clean = async (config: CleanConfig) => {
     hrPrevention: filterPrompt["hrPreventionLogic"],
     seedratio: Number(filterPrompt["seedRatio"]),
     minAge: Number(filterPrompt["minAgeInWeeks"]),
-    onlyTarballs: filterPrompt["onlyTarballs"],
+    onlyRarTorrents: filterPrompt["onlyRarTorrents"],
   });
 
   const fileSelectionPrompt = await prompt([
@@ -86,7 +86,7 @@ export const clean = async (config: CleanConfig) => {
       type: "checkbox",
       choices: removables.map((item) => {
         return {
-          name: `${chalk.bold(item.name)} ${item.isTarball ? chalk.bold("compressed ") : ""}size: ${chalk.bold(
+          name: `${chalk.bold(item.name)} ${item.isRarFileTorrent ? chalk.bold("compressed ") : ""}size: ${chalk.bold(
             bytes.format(item.totalDownloaded, {
               unit: "GB",
             })
@@ -111,7 +111,7 @@ export const clean = async (config: CleanConfig) => {
   console.table([
     ...removablesAfterUserFilter.map((item) => ({
       name: item.name,
-      isTarball: item.isTarball,
+      isRarFileTorrent: item.isRarFileTorrent,
       ratio: Math.round((item.ratio + Number.EPSILON) * 100) / 100,
       size: bytes.format(item.totalDownloaded, { unit: "GB" }),
       tracker: item.raw.tracker_host,
