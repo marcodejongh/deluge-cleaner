@@ -93,6 +93,7 @@ export const clean = async (config: CleanConfig) => {
       isTarball: item.isTarball,
       ratio: Math.round((item.ratio + Number.EPSILON) * 100) / 100,
       size: bytes.format(item.totalDownloaded, { unit: "GB" }),
+      tracker: item.raw.tracker_host,
     })),
     { name: "Total saved", size: bytes.format(totalCleaned, { unit: "GB" }) },
   ]);
