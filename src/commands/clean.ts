@@ -42,9 +42,9 @@ export const clean = async (config: CleanConfig) => {
     hrPreventionLogic: boolean;
     seedRatio: string;
     minAgeInWeeks: string;
-    onlyTarballs: boolean;
+    onlyRarTorrents: boolean;
   }
-  const answers: Answers = await prompt([
+  const filterPrompt: Answers = await prompt([
     {
       name: "hrPreventionLogic",
       type: "confirm",
@@ -65,34 +65,56 @@ export const clean = async (config: CleanConfig) => {
       message: "Minimum torrent age in weeks?",
     },
     {
-      name: "onlyTarballs",
+      name: "onlyRarTorrents",
       type: "confirm",
       default: false,
       message:
-        "Only look for tarballs? If using hardlinks with the *Arr apps deleting tarballs usually frees up space immediately",
+        "Only look for RarTorrents? If using hardlinks with the *Arr apps deleting rar file torrents usually frees up space immediately",
     },
   ]);
 
   const removables = await delugeManager.getFilesReadyForCleaning({
-    hrPrevention: answers["hrPreventionLogic"],
-    seedratio: Number(answers["seedRatio"]),
-    minAge: Number(answers["minAgeInWeeks"]),
-    onlyTarballs: answers["onlyTarballs"],
+    hrPrevention: filterPrompt["hrPreventionLogic"],
+    seedratio: Number(filterPrompt["seedRatio"]),
+    minAge: Number(filterPrompt["minAgeInWeeks"]),
+    onlyRarTorrents: filterPrompt["onlyRarTorrents"],
   });
 
-  removables.sort((a, b) => a.name.localeCompare(b.name));
+  const fileSelectionPrompt = await prompt([
+    {
+      name: "files",
+      type: "checkbox",
+      choices: removables.map((item) => {
+        return {
+          name: `${chalk.bold(item.name)} ${item.isRarFileTorrent ? chalk.bold("compressed ") : ""}size: ${chalk.bold(
+            bytes.format(item.totalDownloaded, {
+              unit: "GB",
+            })
+          )} ratio: ${chalk.bold(Math.round((item.ratio + Number.EPSILON) * 100) / 100)} tracker: ${chalk.bold(
+            item.raw.tracker_host
+          )}`,
+          value: item.id,
+          checked: true,
+        };
+      }),
+    },
+  ]);
+
+  const removablesAfterUserFilter = removables.filter((item) => fileSelectionPrompt.files.includes(item.id));
+  removablesAfterUserFilter.sort((a, b) => a.name.localeCompare(b.name));
   if (removables.length === 0) {
     console.log(chalk.red(`Nothing to cleanup based on the current criteria`));
     return;
   }
 
-  const totalCleaned = removables.reduce((a, { totalDownloaded: b }) => a + b, 0);
+  const totalCleaned = removablesAfterUserFilter.reduce((a, { totalDownloaded: b }) => a + b, 0);
   console.table([
-    ...removables.map((item) => ({
+    ...removablesAfterUserFilter.map((item) => ({
       name: item.name,
-      isTarball: item.isTarball,
+      isRarFileTorrent: item.isRarFileTorrent,
       ratio: Math.round((item.ratio + Number.EPSILON) * 100) / 100,
       size: bytes.format(item.totalDownloaded, { unit: "GB" }),
+      tracker: item.raw.tracker_host,
     })),
     { name: "Total saved", size: bytes.format(totalCleaned, { unit: "GB" }) },
   ]);
@@ -108,6 +130,6 @@ export const clean = async (config: CleanConfig) => {
   ]);
 
   if (finalConfirm.confirm) {
-    await delugeManager.cleanup(removables);
+    await delugeManager.cleanup(removablesAfterUserFilter);
   }
 };

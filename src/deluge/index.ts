@@ -17,13 +17,13 @@ export type CleaningOptions = {
   hrPrevention: boolean;
   seedratio: number;
   minAge: number;
-  onlyTarballs: boolean;
+  onlyRarTorrents: boolean;
 };
 
 export type RemovableItemList = Array<RemovableItem>;
 export type RemovableItemId = string;
 export type RemovableItem = NormalizedTorrent & {
-  isTarball: boolean | null;
+  isRarFileTorrent: boolean | null;
 };
 
 export class DelugeManager {
@@ -36,27 +36,21 @@ export class DelugeManager {
       timeout,
     });
   }
-  /*
-        Marks all the torrents in Deluge with tarball or not tarball labels.
-        When deciding what to remove in the clean action we use the tarball label only.
-
-        Using a seperate scan command because the getAllData endpoint doesnt return the file contents of a torrent.
-        So if we wanted to do this as part of the clean command it would be slow (and it's already quite slow)
-    */
-  async isTarball(id: string, name: string): Promise<boolean> {
+  async isRarFileTorrent(id: string, name: string): Promise<boolean> {
     const client = this.client;
 
     const files = await client.getTorrentFiles(id);
     const fileList = (files.result as any).contents[name] as any;
-    let isTarball = false;
+    let isRarFileTorrent = false;
 
     try {
-      isTarball = fileList.type !== "file" && Object.keys(fileList.contents).some((file: any) => file.endsWith("rar"));
+      isRarFileTorrent =
+        fileList.type !== "file" && Object.keys(fileList.contents).some((file: any) => file.endsWith("rar"));
     } catch (err) {
       console.error(err);
     }
 
-    return isTarball;
+    return isRarFileTorrent;
   }
 
   _torrentHasMinimumAge(dateAdded: string, minAge: number): boolean {
@@ -79,7 +73,7 @@ export class DelugeManager {
     hrPrevention = true,
     seedratio = 2,
     minAge = 3,
-    onlyTarballs = false,
+    onlyRarTorrents = false,
   }: CleaningOptions): Promise<RemovableItemList> {
     const client = this.client;
 
@@ -101,25 +95,31 @@ export class DelugeManager {
       )
       .map((torrent) => ({
         ...torrent,
-        isTarball: null,
+        isRarFileTorrent: null,
       }));
 
     const promises = [];
     for (const torrent of torrents) {
-      // Bit yucky, but this makes all the isTarball requests run in parallel.
+      // Bit yucky, but this makes all the isRarFileTorrents requests run in parallel.
       // Haven't gotten rate limited yet, but it might at some point
-      promises.push(this.isTarball(torrent.id, torrent.name).then((isTarball) => (torrent.isTarball = isTarball)));
+      promises.push(
+        this.isRarFileTorrent(torrent.id, torrent.name).then(
+          (isRarFileTorrent) => (torrent.isRarFileTorrent = isRarFileTorrent)
+        )
+      );
     }
 
-    const allTarballsPromise = Promise.all(promises);
-    oraPromise(allTarballsPromise, { text: `Fetching file information for ${chalk.bold(torrents.length)} torrents` });
-    await allTarballsPromise;
+    const allRarTorrentsPromise = Promise.all(promises);
+    oraPromise(allRarTorrentsPromise, {
+      text: `Fetching file information for ${chalk.bold(torrents.length)} torrents`,
+    });
+    await allRarTorrentsPromise;
 
-    if (!onlyTarballs) {
+    if (!onlyRarTorrents) {
       return torrents;
     }
 
-    return torrents.filter((torrent) => torrent.isTarball);
+    return torrents.filter((torrent) => torrent.isRarFileTorrent);
   }
 
   async cleanup(removableItems: RemovableItemList) {
