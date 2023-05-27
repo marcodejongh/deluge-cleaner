@@ -21,6 +21,8 @@ export type CleaningOptions = {
 
 export type RemovableItemList = Array<RemovableItem>;
 export type RemovableItemId = string;
+
+//TODO: Cleanup RemovableItem so it's more normalised and can be more easily reused for implementing other clients
 export type RemovableItem = NormalizedTorrent & {
   isRarFileTorrent: boolean | null;
   hasTorrentSatisifiedHnr: boolean | null;

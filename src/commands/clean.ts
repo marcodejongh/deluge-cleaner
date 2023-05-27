@@ -12,6 +12,12 @@ export interface CleanConfig {
 }
 
 export const clean = async (config: CleanConfig) => {
+  /* 
+  TODO: Make this whole CLI process non-interactive with flags, so it can be run automatically
+  TODO: Add option to pause instead of delete for automated non-interactive mode
+  TODO: Add some kind of first in first out logic for deciding what to clean up first
+  TODO: Probably we want to clean up popular stuff first? Since that will have enough swarm
+  */
   const delugeManager = new DelugeManager(config);
   const labels = await delugeManager.getLabels();
   const prompt = inquirer.createPromptModule();
