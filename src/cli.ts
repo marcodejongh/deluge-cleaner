@@ -22,6 +22,7 @@ const main = async (command: string, flags: any) => {
     password: flags.delugePassword || config.deluge.password,
     baseUrl: flags.delugeUrl || config.deluge.baseUrl,
     timeout: flags.timeout,
+    trackerRules: config.trackerrules || [],
   };
 
   switch (command) {

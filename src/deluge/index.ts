@@ -1,8 +1,9 @@
-import { Deluge } from "@ctrl/deluge";
+import { Deluge, Torrent } from "@ctrl/deluge";
 import { differenceInCalendarWeeks } from "date-fns";
 import { oraPromise } from "ora";
 import chalk from "chalk";
-import { NormalizedTorrent } from "./copied-internal-interfaces.js";
+import { AllClientData, NormalizedTorrent } from "./copied-internal-interfaces.js";
+import { TrackerRule, TrackerRules } from "../ConfigInterface.js";
 
 export const SONARR_IMPORTED_LABEL = "sonarr-imported";
 export const RADARR_IMPORTED_LABEL = "radarr-imported";
@@ -11,38 +12,61 @@ export interface DelugeConfig {
   baseUrl: string;
   password: string;
   timeout?: number;
+  trackerRules: TrackerRules;
 }
 
 export type CleaningOptions = {
-  hrPrevention: boolean;
-  seedratio: number;
-  minAge: number;
-  onlyRarTorrents: boolean;
+  labels: string[];
 };
 
 export type RemovableItemList = Array<RemovableItem>;
 export type RemovableItemId = string;
 export type RemovableItem = NormalizedTorrent & {
   isRarFileTorrent: boolean | null;
+  hasTorrentSatisifiedHnr: boolean | null;
+};
+
+export type DelugeLabels = {
+  id: string;
+  name: string;
+  count: number;
 };
 
 export class DelugeManager {
   client: Deluge;
+  allDataRequestPromise: Promise<AllClientData>;
+  trackerRules: TrackerRules;
 
-  constructor({ baseUrl, password, timeout = 60000 }: DelugeConfig) {
+  constructor({ baseUrl, password, timeout = 60000, trackerRules }: DelugeConfig) {
+    //TODO: Should probably change this to listTorrents and pass in the appropiate filter
     this.client = new Deluge({
       baseUrl,
       password,
       timeout,
     });
+    this.allDataRequestPromise = this.client.getAllData();
+    this.trackerRules = trackerRules;
   }
-  async isRarFileTorrent(id: string, name: string): Promise<boolean> {
+
+  async getLabels(): Promise<DelugeLabels[]> {
+    const allData = await this.allDataRequestPromise;
+    return allData.labels;
+  }
+
+  async isRarFileTorrent(id: string, name: string, trackerRule: TrackerRule | undefined): Promise<boolean> {
     const client = this.client;
 
-    const files = await client.getTorrentFiles(id);
-    const fileList = (files.result as any).contents[name] as any;
-    let isRarFileTorrent = false;
+    if (trackerRule && !trackerRule.allowsRars) {
+      return false;
+    }
 
+    const files = await client.getTorrentFiles(id);
+    const resultContents = Object.values(files.result.contents);
+    if (resultContents.length > 1) {
+      throw new Error("Unexpected error, found more then 1 torrent contents result");
+    }
+    const fileList = resultContents[0];
+    let isRarFileTorrent = false;
     try {
       isRarFileTorrent =
         fileList.type !== "file" && Object.keys(fileList.contents).some((file: any) => file.endsWith("rar"));
@@ -57,69 +81,56 @@ export class DelugeManager {
     return differenceInCalendarWeeks(new Date(), new Date(dateAdded)) >= minAge;
   }
 
-  _torrentHasRequiredLabels(label: string = "") {
-    return label.length > 0 && (label === SONARR_IMPORTED_LABEL || label === RADARR_IMPORTED_LABEL);
+  _torrentHasRequiredLabels(label: string = "", labels: string[]) {
+    return labels.length === 0 || labels.includes(label);
   }
 
-  _torrentSeedratioAndAgeFilter(hrPrevention: boolean, minAge: number, seedratio: number, torrent: NormalizedTorrent) {
-    if (hrPrevention) {
-      return this._torrentHasMinimumAge(torrent.dateAdded, minAge) || torrent.ratio >= seedratio;
-    } else {
-      return this._torrentHasMinimumAge(torrent.dateAdded, minAge) && torrent.ratio >= seedratio;
-    }
+  _torrentSeedratioAndAgeFilter(minAge: number, seedratio: number, torrent: NormalizedTorrent) {
+    return this._torrentHasMinimumAge(torrent.dateAdded, minAge) || torrent.ratio >= seedratio;
   }
 
-  async getFilesReadyForCleaning({
-    hrPrevention = true,
-    seedratio = 2,
-    minAge = 3,
-    onlyRarTorrents = false,
-  }: CleaningOptions): Promise<RemovableItemList> {
-    const client = this.client;
+  async getFilesReadyForCleaning({ labels = [] }: CleaningOptions): Promise<RemovableItemList> {
+    const allData = await this.allDataRequestPromise;
 
-    //TODO: Should probably change this to listTorrents and pass in the appropiate filter
-    const allDataRequestPromise = client.getAllData();
-
-    oraPromise(allDataRequestPromise, { text: "Fetching all torrents" });
-
-    const allDataRequest = await allDataRequestPromise;
-
-    const torrents: RemovableItemList = allDataRequest.torrents
-      .filter(
-        (torrent) =>
-          torrent.state === "seeding" &&
-          this._torrentHasRequiredLabels(torrent.label) &&
-          //TODO: DateAdded is not the same as seeding date, but for me it usually will be pretty close
-          // Should figure out how to get the real seed date here.
-          this._torrentSeedratioAndAgeFilter(hrPrevention, minAge, seedratio, torrent)
-      )
+    const torrents: RemovableItemList = allData.torrents
+      .filter((torrent) => this._torrentHasRequiredLabels(torrent.label, labels))
       .map((torrent) => ({
         ...torrent,
         isRarFileTorrent: null,
+        hasTorrentSatisifiedHnr: null,
       }));
 
     const promises = [];
+
     for (const torrent of torrents) {
+      const trackerRule = this.trackerRules.find((trackerRule) => trackerRule.hosts.includes(torrent.raw.tracker_host));
+
       // Bit yucky, but this makes all the isRarFileTorrents requests run in parallel.
       // Haven't gotten rate limited yet, but it might at some point
       promises.push(
-        this.isRarFileTorrent(torrent.id, torrent.name).then(
+        this.isRarFileTorrent(torrent.id, torrent.name, trackerRule).then(
           (isRarFileTorrent) => (torrent.isRarFileTorrent = isRarFileTorrent)
         )
+      );
+      promises.push(
+        this.client.getTorrentStatus(torrent.id).then((torrentStatus) => {
+          torrent.hasTorrentSatisifiedHnr = this.hasTorrentSatisifiedHnr(
+            torrentStatus.result["seeding_time"],
+            torrentStatus.result.ratio,
+            trackerRule
+          );
+        })
       );
     }
 
     const allRarTorrentsPromise = Promise.all(promises);
     oraPromise(allRarTorrentsPromise, {
-      text: `Fetching file information for ${chalk.bold(torrents.length)} torrents`,
+      text: `Fetching file information & torrent status for ${chalk.bold(torrents.length)} torrents`,
     });
+
     await allRarTorrentsPromise;
 
-    if (!onlyRarTorrents) {
-      return torrents;
-    }
-
-    return torrents.filter((torrent) => torrent.isRarFileTorrent);
+    return torrents;
   }
 
   async cleanup(removableItems: RemovableItemList) {
@@ -131,5 +142,38 @@ export class DelugeManager {
 
   _cleanupInternal(id: string) {
     return this.client.removeTorrent(id, true);
+  }
+
+  hasTorrentSatisifiedHnr(
+    torrentSeedTime: number,
+    torrentRatio: number,
+    trackerRule: TrackerRule | undefined
+  ): boolean {
+    const hnrRules = trackerRule?.hnrRules;
+
+    if (!hnrRules) {
+      return false;
+    }
+
+    const { ratio = Infinity, seedTimeInHours = Infinity } = hnrRules;
+
+    if (seedTimeInHours === Infinity && ratio === Infinity) {
+      throw new Error(`Tracker rule for ${trackerRule.name} has no defined rules`);
+    }
+
+    const torrentSeedTimeInHours = torrentSeedTime / 3600;
+
+    if (hnrRules.condition === "OR") {
+      return ratio < torrentRatio || seedTimeInHours < torrentSeedTimeInHours;
+    } else {
+      console.warn("Haven't tested the AND condition for HNR rules yet, use at own risk");
+      if (ratio === Infinity) {
+        return seedTimeInHours < torrentSeedTimeInHours;
+      } else if (seedTimeInHours === Infinity) {
+        return ratio < torrentRatio;
+      } else {
+        return ratio < torrentRatio && seedTimeInHours < torrentSeedTimeInHours;
+      }
+    }
   }
 }

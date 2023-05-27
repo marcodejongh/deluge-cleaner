@@ -1,5 +1,5 @@
-import { ConfigInterface } from "../ConfigInterface.js";
-import { DelugeManager, RADARR_IMPORTED_LABEL, SONARR_IMPORTED_LABEL } from "../deluge/index.js";
+import { ConfigInterface, TrackerRule, TrackerRules } from "../ConfigInterface.js";
+import { DelugeManager, RADARR_IMPORTED_LABEL, RemovableItem, SONARR_IMPORTED_LABEL } from "../deluge/index.js";
 import inquirer from "inquirer";
 import bytes from "bytes";
 import chalk from "chalk";
@@ -8,17 +8,31 @@ export interface CleanConfig {
   password: string;
   baseUrl: string;
   timeout: number;
+  trackerRules: TrackerRules;
 }
+
 export const clean = async (config: CleanConfig) => {
   const delugeManager = new DelugeManager(config);
-  // delugeManager.scan();
+  const labels = await delugeManager.getLabels();
   const prompt = inquirer.createPromptModule();
 
-  console.info(
-    chalk.green(
-      `This tool will only cleanup torrents with labels: ${SONARR_IMPORTED_LABEL} or ${RADARR_IMPORTED_LABEL}`
-    )
-  );
+  const labelSelectionPrompt = await prompt([
+    {
+      name: "labels",
+      type: "checkbox",
+      choices: labels.map(({ name, id, count }) => {
+        // Deluge no label is ""
+        const realName = name.length > 0 ? name : "no-label";
+
+        return {
+          name: `${chalk.bold(realName)} ${count}`,
+          value: id,
+          checked: false,
+        };
+      }),
+    },
+  ]);
+
   console.info(
     chalk.green(`Make sure to change config of Radarr and Sonarr respectively to add this labels after import`)
   );
@@ -39,64 +53,61 @@ export const clean = async (config: CleanConfig) => {
   console.info(`you have to answer "no" to the first question.\n `);
 
   interface Answers {
-    hrPreventionLogic: boolean;
-    seedRatio: string;
-    minAgeInWeeks: string;
-    onlyRarTorrents: boolean;
+    preselectHnrFree: boolean;
+    preselectRar: boolean;
   }
   const filterPrompt: Answers = await prompt([
     {
-      name: "hrPreventionLogic",
+      name: "preselectHnrFree",
       type: "confirm",
       default: true,
-      message: "Use filtering to prevent torrent Hit & Run warnings?",
-    },
-    {
-      name: "seedRatio",
-      type: "input",
-      default: "1",
       // TODO: Fix my english in this message
-      message: "Whats the minimum seed ratio before removal?",
+      message: "Preselect torrents that have satisfied the HNR rules for that tracker?",
     },
     {
-      name: "minAgeInWeeks",
-      type: "input",
-      default: "3",
-      message: "Minimum torrent age in weeks?",
-    },
-    {
-      name: "onlyRarTorrents",
+      name: "preselectRar",
       type: "confirm",
       default: false,
-      message:
-        "Only look for RarTorrents? If using hardlinks with the *Arr apps deleting rar file torrents usually frees up space immediately",
+      message: "Preselect rar file torrents?",
     },
   ]);
 
   const removables = await delugeManager.getFilesReadyForCleaning({
-    hrPrevention: filterPrompt["hrPreventionLogic"],
-    seedratio: Number(filterPrompt["seedRatio"]),
-    minAge: Number(filterPrompt["minAgeInWeeks"]),
-    onlyRarTorrents: filterPrompt["onlyRarTorrents"],
+    labels: labelSelectionPrompt.labels,
+  });
+
+  const fileSelectionChoices = removables.map((item) => {
+    const trackerRule = config.trackerRules.find((trackerRule) => trackerRule.hosts.includes(item.raw.tracker_host));
+    const hasSatisfiedHnr = item.hasTorrentSatisifiedHnr;
+
+    let hnrString = chalk.red("HNR Unsatisfied");
+    if (trackerRule === undefined) {
+      hnrString = chalk.red("no tracker rule found");
+    } else if (hasSatisfiedHnr) {
+      hnrString = chalk.green("HNR satisfied");
+    }
+    const checked = filterPrompt.preselectRar
+      ? (!filterPrompt.preselectHnrFree || hasSatisfiedHnr) && item.isRarFileTorrent
+      : filterPrompt.preselectHnrFree && hasSatisfiedHnr;
+
+    return {
+      name: `${chalk.bold(item.name)} ${item.isRarFileTorrent ? chalk.bold("compressed ") : ""}size: ${chalk.bold(
+        bytes.format(item.totalDownloaded, {
+          unit: "GB",
+        })
+      )} ratio: ${chalk.bold(Math.round((item.ratio + Number.EPSILON) * 100) / 100)} tracker: ${chalk.bold(
+        trackerRule?.name
+      )} ${chalk.bold(hnrString)}`,
+      value: item.id,
+      checked: checked,
+    };
   });
 
   const fileSelectionPrompt = await prompt([
     {
       name: "files",
       type: "checkbox",
-      choices: removables.map((item) => {
-        return {
-          name: `${chalk.bold(item.name)} ${item.isRarFileTorrent ? chalk.bold("compressed ") : ""}size: ${chalk.bold(
-            bytes.format(item.totalDownloaded, {
-              unit: "GB",
-            })
-          )} ratio: ${chalk.bold(Math.round((item.ratio + Number.EPSILON) * 100) / 100)} tracker: ${chalk.bold(
-            item.raw.tracker_host
-          )}`,
-          value: item.id,
-          checked: true,
-        };
-      }),
+      choices: fileSelectionChoices,
     },
   ]);
 
@@ -112,6 +123,7 @@ export const clean = async (config: CleanConfig) => {
     ...removablesAfterUserFilter.map((item) => ({
       name: item.name,
       isRarFileTorrent: item.isRarFileTorrent,
+      HNRSatisfied: item.hasTorrentSatisifiedHnr,
       ratio: Math.round((item.ratio + Number.EPSILON) * 100) / 100,
       size: bytes.format(item.totalDownloaded, { unit: "GB" }),
       tracker: item.raw.tracker_host,
