@@ -1,4 +1,4 @@
-import { Deluge, Torrent } from "@ctrl/deluge";
+import { Deluge, Torrent, TorrentStatus } from "@ctrl/deluge";
 import { differenceInCalendarWeeks } from "date-fns";
 import { oraPromise } from "ora";
 import chalk from "chalk";
@@ -24,6 +24,7 @@ export type RemovableItemId = string;
 export type RemovableItem = NormalizedTorrent & {
   isRarFileTorrent: boolean | null;
   hasTorrentSatisifiedHnr: boolean | null;
+  isStuck: boolean | null;
 };
 
 export type DelugeLabels = {
@@ -98,6 +99,7 @@ export class DelugeManager {
         ...torrent,
         isRarFileTorrent: null,
         hasTorrentSatisifiedHnr: null,
+        isStuck: null,
       }));
 
     const promises = [];
@@ -114,6 +116,7 @@ export class DelugeManager {
       );
       promises.push(
         this.client.getTorrentStatus(torrent.id).then((torrentStatus) => {
+          torrent.isStuck = this.isTorrentStuck(torrentStatus, trackerRule);
           torrent.hasTorrentSatisifiedHnr = this.hasTorrentSatisifiedHnr(
             torrentStatus.result["seeding_time"],
             torrentStatus.result.ratio,
@@ -131,6 +134,17 @@ export class DelugeManager {
     await allRarTorrentsPromise;
 
     return torrents;
+  }
+
+  isTorrentStuck(torrentStatus: TorrentStatus, trackerRule: TrackerRule | undefined): any {
+    // TODO: Add more checks here
+    return (
+      torrentStatus.result.state === "Downloading" &&
+      torrentStatus.result.total_done === 0 &&
+      (torrentStatus.result.tracker_status.startsWith("Error: VIP Access Required") ||
+        (torrentStatus.result.tracker_status.startsWith("Error: skipping tracker announce (unreachable)") &&
+          torrentStatus.result.num_seeds === 0))
+    );
   }
 
   async cleanup(removableItems: RemovableItemList) {

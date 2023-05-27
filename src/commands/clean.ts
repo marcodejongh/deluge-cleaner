@@ -53,19 +53,26 @@ export const clean = async (config: CleanConfig) => {
   console.info(`you have to answer "no" to the first question.\n `);
 
   interface Answers {
-    preselectHnrFree: boolean;
-    preselectRar: boolean;
+    selectHnrFree: boolean;
+    selectRar: boolean;
+    selectStuck: boolean;
   }
   const filterPrompt: Answers = await prompt([
     {
-      name: "preselectHnrFree",
+      name: "selectHnrFree",
       type: "confirm",
       default: true,
       // TODO: Fix my english in this message
       message: "Preselect torrents that have satisfied the HNR rules for that tracker?",
     },
     {
-      name: "preselectRar",
+      name: "selectStuck",
+      type: "confirm",
+      default: false,
+      message: "Select stuck torrents?",
+    },
+    {
+      name: "selectRar",
       type: "confirm",
       default: false,
       message: "Preselect rar file torrents?",
@@ -86,9 +93,13 @@ export const clean = async (config: CleanConfig) => {
     } else if (hasSatisfiedHnr) {
       hnrString = chalk.green("HNR satisfied");
     }
-    const checked = filterPrompt.preselectRar
-      ? (!filterPrompt.preselectHnrFree || hasSatisfiedHnr) && item.isRarFileTorrent
-      : filterPrompt.preselectHnrFree && hasSatisfiedHnr;
+    let checked = filterPrompt.selectRar
+      ? (!filterPrompt.selectHnrFree || hasSatisfiedHnr) && item.isRarFileTorrent
+      : filterPrompt.selectHnrFree && hasSatisfiedHnr;
+
+    if (filterPrompt.selectStuck && item.isStuck) {
+      checked = true;
+    }
 
     return {
       name: `${chalk.bold(item.name)} ${item.isRarFileTorrent ? chalk.bold("compressed ") : ""}size: ${chalk.bold(
